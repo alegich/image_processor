@@ -4,6 +4,8 @@ import numpy as np
 import os
 import glob
 from datetime import datetime
+import io
+import zipfile
 
 app = Flask(__name__)
 
@@ -15,40 +17,44 @@ def process_image():
     if 'image' not in request.files:
         return jsonify({'error': 'No image part in request'}), 400
 
-    file = request.files['image']
-    image_data = np.frombuffer(file.read(), np.uint8)
-    img = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+    files = request.files.getlist('image')
+    if not files:
+        return jsonify({'error': 'No images uploaded'}), 400
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    processed_files = []
 
-    # Improve contrast with histogram equalization
-    enhanced = cv2.equalizeHist(gray)
+    for file in files:
+        image_data = np.frombuffer(file.read(), np.uint8)
+        img = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+        if img is None:
+            continue
 
-    filename = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-    filepath = os.path.join(OUTPUT_DIR, filename)
-    cv2.imwrite(filepath, enhanced)
+        # Convert to grayscale and enhance
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        enhanced = cv2.equalizeHist(gray)
 
-    cleanup_snapshots()
+        # Save processed image to memory (not disk)
+        filename = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
+        _, buffer = cv2.imencode('.jpg', enhanced)
+        processed_files.append((filename, buffer.tobytes()))
 
-    return send_file(filepath, mimetype='image/jpeg')
+    if not processed_files:
+        return jsonify({'error': 'No valid images processed'}), 400
 
-def cleanup_snapshots(keep=5):
-    pattern = os.path.join(OUTPUT_DIR, "snap_*.jpg")
+    # Create in-memory zip file
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w') as zipf:
+        for fname, content in processed_files:
+            zipf.writestr(fname, content)
 
-    # Get a list of files matching the pattern, sorted by modification time (descending)
-    files = sorted(
-        glob.glob(pattern),
-        key=os.path.getmtime,
-        reverse=True
+    zip_buffer.seek(0)
+
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='processed_images.zip'
     )
-
-    # Keep only the newest 'keep' files
-    files_to_delete = files[keep:]
-
-    for file_path in files_to_delete:
-        os.remove(file_path)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)
-
