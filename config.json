@@ -1,0 +1,18 @@
+{
+  "name": "Image Processor",
+  "version": "1.0.1",
+  "slug": "process_image",
+  "description": "Processes images via a Flask API",
+  "arch": ["amd64", "aarch64", "armv7"],
+  "startup": "application",
+  "boot": "auto",
+  "ingress": false,
+  "panel_icon": "mdi:image",
+  "ports": {
+    "5005/tcp": 5005
+  },
+  "ports_description": {
+    "5005/tcp": "Flask API port"
+  }
+}
+
