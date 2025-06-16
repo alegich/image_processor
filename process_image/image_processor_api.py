@@ -20,6 +20,60 @@ def process_image():
     files = request.files.getlist('image')
     if not files:
         return jsonify({'error': 'No images uploaded'}), 400
+    
+    actions = request.args.get('actions', 'gray,equalize,denoise').split(',')
+
+    processed_files = []
+
+    for file in files:
+        image_data = np.frombuffer(file.read(), np.uint8)
+        img = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+        if img is None:
+            continue
+
+        # Convert to grayscale and enhance
+        if 'gray' in actions:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        if 'equalize' in actions:
+            img = cv2.equalizeHist(img)
+        if 'denoise' in actions:
+            img = cv2.fastNlMeansDenoising(img, h=10)
+        if 'clahe' in actions:
+            img = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(img)
+        if 'blur' in actions:
+            img = cv2.GaussianBlur(img, (3, 3), 0)
+
+        # Save processed image to memory (not disk)
+        filename = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
+        _, buffer = cv2.imencode('.jpg', img)
+        processed_files.append((filename, buffer.tobytes()))
+
+    if not processed_files:
+        return jsonify({'error': 'No valid images processed'}), 400
+
+    # Create in-memory zip file
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w') as zipf:
+        for fname, content in processed_files:
+            zipf.writestr(fname, content)
+
+    zip_buffer.seek(0)
+
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='processed_images.zip'
+    )
+
+@app.route('/detect-face', methods=['POST'])
+def detect_face():
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image part in request'}), 400
+
+    files = request.files.getlist('image')
+    if not files:
+        return jsonify({'error': 'No images uploaded'}), 400
 
     processed_files = []
 
