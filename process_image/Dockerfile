@@ -1,12 +1,50 @@
-#FROM python:3.12-slim
-FROM animcogn/face_recognition:cpu
+FROM --platform=linux/arm64 python:3.8-buster AS compile
 
-#RUN apt-get update && apt-get install -y libgl1
-RUN pip install flask opencv-python-headless
+ENV DEBIAN_FRONTEND=noninteractive
 
-COPY image_processor_api.py /app/
-WORKDIR /app
+# Install base build dependencies
+RUN apt-get update
 
-EXPOSE 5005
+RUN apt-get install -y --no-install-recommends \
+    build-essential
+RUN apt-get install -y --no-install-recommends \
+    cmake
+RUN apt-get install -y --no-install-recommends \
+    gfortran \
+    git \
+    wget \
+    curl
+RUN apt-get install -y --no-install-recommends \
+    libatlas-base-dev \
+    libjpeg-dev \
+    liblapack-dev \
+    libswscale-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    pkg-config \
+    python3-dev \
+    python3-numpy \
+    zip \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-CMD ["python", "image_processor_api.py"]
+# Create virtual environment
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Upgrade pip and install required packages
+RUN pip install --upgrade pip
+
+# Clone and install dlib (with minimal GUI-free config)
+RUN git clone -b 'v19.21' --single-branch https://github.com/davisking/dlib.git && \
+    cd dlib && \
+    python3 setup.py install --set BUILD_SHARED_LIBS=OFF
+
+# Install face_recognition and OpenCV
+RUN pip install face_recognition opencv-python-headless
+
+# Runtime image
+FROM --platform=linux/arm64 python:3.8-buster
+
+COPY --from=compile /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
