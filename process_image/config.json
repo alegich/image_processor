@@ -1,6 +1,6 @@
 {
   "name": "Image Processor",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "slug": "process_image",
   "description": "Processes images via a Flask API",
   "arch": ["amd64", "aarch64", "armv7"],

@@ -6,6 +6,7 @@ import glob
 from datetime import datetime
 import io
 import zipfile
+import face_recognition
 
 app = Flask(__name__)
 
@@ -42,6 +43,8 @@ def process_image():
             img = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(img)
         if 'blur' in actions:
             img = cv2.GaussianBlur(img, (3, 3), 0)
+        if 'faces' in actions:
+            img = detect_faces(img)
 
         # Save processed image to memory (not disk)
         filename = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
@@ -65,6 +68,50 @@ def process_image():
         as_attachment=True,
         download_name='processed_images.zip'
     )
+
+def detect_faces(image):
+    # convert to RGB for face detection
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # Detect face locations: [(top, right, bottom, left), ...]
+    face_locations = face_recognition.face_locations(image_rgb)
+    print(f"Found {len(face_locations)} face(s)")
+    draw_dashes(image, face_locations)
+    return image
+
+def draw_dashed_box(image, top_left, bottom_right, color=(0, 255, 0), thickness=2, dash_length=10):
+    """Draw a dashed rectangle by splitting lines into dashes."""
+    x1, y1 = top_left
+    x2, y2 = bottom_right
+
+    def draw_dashed_line(p1, p2):
+        dist = ((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2) ** 0.5
+        dashes = int(dist / dash_length)
+        for i in range(0, dashes, 2):
+            start = (
+                int(p1[0] + (p2[0] - p1[0]) * i / dashes),
+                int(p1[1] + (p2[1] - p1[1]) * i / dashes),
+            )
+            end = (
+                int(p1[0] + (p2[0] - p1[0]) * (i + 1) / dashes),
+                int(p1[1] + (p2[1] - p1[1]) * (i + 1) / dashes),
+            )
+            cv2.line(image, start, end, color, thickness)
+
+    # Top edge
+    draw_dashed_line((x1, y1), (x2, y1))
+    # Right edge
+    draw_dashed_line((x2, y1), (x2, y2))
+    # Bottom edge
+    draw_dashed_line((x2, y2), (x1, y2))
+    # Left edge
+    draw_dashed_line((x1, y2), (x1, y1))
+
+def draw_dashes(image, face_locations):
+    # Draw dashed boxes
+    for (top, right, bottom, left) in face_locations:
+        draw_dashed_box(image, (left, top), (right, bottom))
+
+
 
 @app.route('/detect-face', methods=['POST'])
 def detect_face():

@@ -21,3 +21,7 @@ CLAHE
 #### `blur` (optional)
 
 Gaussian blur
+
+#### `faces` (optional)
+
+Detects faces and draws dashed rectangles around them
