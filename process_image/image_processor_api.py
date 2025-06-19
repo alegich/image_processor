@@ -69,12 +69,18 @@ def process_image():
         download_name='processed_images.zip'
     )
 
+def is_grayscale(image):
+    return len(image.shape) == 2 or (len(image.shape) == 3 and image.shape[2] == 1)
+
 def detect_faces(image):
     # convert to RGB for face detection
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     # Detect face locations: [(top, right, bottom, left), ...]
     face_locations = face_recognition.face_locations(image_rgb)
     print(f"Found {len(face_locations)} face(s)")
+    if is_grayscale(image):
+        # If the image is grayscale, convert it to BGR for drawing
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     draw_dashes(image, face_locations)
     return image
 
@@ -110,52 +116,6 @@ def draw_dashes(image, face_locations):
     # Draw dashed boxes
     for (top, right, bottom, left) in face_locations:
         draw_dashed_box(image, (left, top), (right, bottom))
-
-
-
-@app.route('/detect-face', methods=['POST'])
-def detect_face():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image part in request'}), 400
-
-    files = request.files.getlist('image')
-    if not files:
-        return jsonify({'error': 'No images uploaded'}), 400
-
-    processed_files = []
-
-    for file in files:
-        image_data = np.frombuffer(file.read(), np.uint8)
-        img = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
-        if img is None:
-            continue
-
-        # Convert to grayscale and enhance
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        enhanced = cv2.equalizeHist(gray)
-
-        # Save processed image to memory (not disk)
-        filename = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
-        _, buffer = cv2.imencode('.jpg', enhanced)
-        processed_files.append((filename, buffer.tobytes()))
-
-    if not processed_files:
-        return jsonify({'error': 'No valid images processed'}), 400
-
-    # Create in-memory zip file
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w') as zipf:
-        for fname, content in processed_files:
-            zipf.writestr(fname, content)
-
-    zip_buffer.seek(0)
-
-    return send_file(
-        zip_buffer,
-        mimetype='application/zip',
-        as_attachment=True,
-        download_name='processed_images.zip'
-    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)

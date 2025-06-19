@@ -1,3 +1,9 @@
+### 1.0.9
+
+### Changed
+
+- dashes are now drawn in color
+
 ### 1.0.8
 
 ### Added
